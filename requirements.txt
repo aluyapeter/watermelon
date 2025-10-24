@@ -2,8 +2,10 @@ annotated-doc==0.0.3
 annotated-types==0.7.0
 anyio==4.11.0
 certifi==2025.10.5
+cffi==2.0.0
 click==8.3.0
 colorama==0.4.6
+cryptography==46.0.3
 dnspython==2.8.0
 email-validator==2.3.0
 fastapi==0.120.0
@@ -22,6 +24,7 @@ MarkupSafe==3.0.3
 mdurl==0.1.2
 orjson==3.11.4
 pillow==12.0.0
+pycparser==2.23
 pydantic==2.12.3
 pydantic-extra-types==2.10.6
 pydantic-settings==2.11.0
