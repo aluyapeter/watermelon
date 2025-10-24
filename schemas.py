@@ -15,7 +15,7 @@ class CountryResponse(BaseModel):
     last_refreshed_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class StatusResponse(BaseModel):
     total_countries: int
