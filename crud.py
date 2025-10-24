@@ -9,15 +9,13 @@ import os
 from PIL import Image, ImageDraw, ImageFont
 import models
 
-# --- Configuration ---
+
 COUNTRIES_API_URL = "https://restcountries.com/v2/all?fields=name,capital,region,population,flag,currencies"
 RATES_API_URL = "https://open.er-api.com/v6/latest/USD"
 
-# --- 3. DEFINE IMAGE PATH ---
 CACHE_DIR = "cache"
 IMAGE_PATH = os.path.join(CACHE_DIR, "summary.png")
 
-# ... (ExternalApiError class and fetch functions remain the same) ...
 class ExternalApiError(Exception):
     def __init__(self, service_name: str, status_code: Optional[int] = None, message: Optional[str] = None):
         self.service_name = service_name
@@ -26,10 +24,9 @@ class ExternalApiError(Exception):
         super().__init__(self.message)
 
 async def fetch_countries_data(client: httpx.AsyncClient) -> list:
-    # ... (no change) ...
     try:
         response = await client.get(COUNTRIES_API_URL, timeout=10.0)
-        response.raise_for_status()  # Raise an exception for 4xx or 5xx errors
+        response.raise_for_status()
         return response.json()
     except httpx.HTTPStatusError as e:
         raise ExternalApiError("restcountries.com", e.response.status_code, str(e))
@@ -37,7 +34,6 @@ async def fetch_countries_data(client: httpx.AsyncClient) -> list:
         raise ExternalApiError("restcountries.com", message=str(e))
 
 async def fetch_exchange_rates(client: httpx.AsyncClient) -> dict:
-    # ... (no change) ...
     try:
         response = await client.get(RATES_API_URL, timeout=10.0)
         response.raise_for_status()
@@ -47,8 +43,6 @@ async def fetch_exchange_rates(client: httpx.AsyncClient) -> dict:
     except httpx.RequestError as e:
         raise ExternalApiError("open.er-api.com", message=str(e))
 
-
-# --- 4. NEW IMAGE GENERATION FUNCTION ---
 def generate_summary_image(db: Session, last_refresh_time: datetime):
     """
     Generates and saves a summary image with stats from the database.
@@ -59,18 +53,16 @@ def generate_summary_image(db: Session, last_refresh_time: datetime):
         
         # Query for Top 5 countries by estimated_gdp (descending)
         top_5_countries = db.query(models.Country).order_by(
-            models.Country.estimated_gdp.is_(None),  # 1. Puts all NULLs last
-            desc(models.Country.estimated_gdp)       # 2. Sorts non-NULLs highest-to-lowest
+            models.Country.estimated_gdp.is_(None), 
+            desc(models.Country.estimated_gdp)
         ).limit(5).all()
 
-        # --- B. Create the Image ---
         img_width = 500
         img_height = 300
         # Create a new white image
         img = Image.new('RGB', (img_width, img_height), color='white')
         d = ImageDraw.Draw(img)
 
-        # --- C. Load a Font ---
         try:
             font_title = ImageFont.truetype("arial.ttf", 20)
             font_body = ImageFont.truetype("arial.ttf", 15)
@@ -78,7 +70,6 @@ def generate_summary_image(db: Session, last_refresh_time: datetime):
             font_title = ImageFont.load_default()
             font_body = ImageFont.load_default()
 
-        # --- D. Draw the Text ---
         padding = 20
         d.text((padding, padding), "Country API Refresh Summary", fill='black', font=font_title)
         
@@ -97,28 +88,22 @@ def generate_summary_image(db: Session, last_refresh_time: datetime):
             gdp_str = f"${country.estimated_gdp:,.2f}" if country.estimated_gdp is not None else "N/A"
             line = f"{i+1}. {country.name} ({gdp_str})"
             d.text((padding + 10, current_y), line, fill='black', font=font_body)
-            current_y += 20 # Move down for the next line
+            current_y += 20
 
-        # --- E. Save the Image ---
-        # Ensure the cache directory exists
         os.makedirs(CACHE_DIR, exist_ok=True)
         img.save(IMAGE_PATH)
         print(f"Summary image saved to {IMAGE_PATH}")
 
     except Exception as e:
-        # We'll just print the error. Failing to create an image
-        # shouldn't cause the whole /refresh endpoint to fail.
         print(f"Error generating summary image: {e}")
 
 
-# --- Main Refresh Function (MODIFIED) ---
 async def refresh_all_countries(db: Session) -> dict:
     """
     The main logic for the POST /countries/refresh endpoint.
     Fetches, processes, and "upserts" country data.
     """
     try:
-        # ... (all the fetching and processing logic remains exactly the same) ...
         async with httpx.AsyncClient() as client:
             countries_data = await fetch_countries_data(client)
             rates_data = await fetch_exchange_rates(client)
@@ -180,7 +165,6 @@ async def refresh_all_countries(db: Session) -> dict:
             
             country_count += 1
 
-        # ... (Status update logic remains the same) ...
         status_record = db.query(models.Status).filter(models.Status.id == 1).first()
         refresh_time = datetime.utcnow()
 
@@ -194,13 +178,7 @@ async def refresh_all_countries(db: Session) -> dict:
                 last_refreshed_at=refresh_time
             )
             db.add(new_status)
-
-        # --- 5. COMMIT CHANGES (NO CHANGE) ---
         db.commit()
-
-        # --- 6. CALL IMAGE FUNCTION (NEW) ---
-        # After the data is successfully committed,
-        # we generate the summary image.
         generate_summary_image(db, refresh_time)
 
         return {
@@ -210,17 +188,14 @@ async def refresh_all_countries(db: Session) -> dict:
         }
 
     except ExternalApiError as e:
-        # ... (no change) ...
         db.rollback()
         raise e
     
     except SQLAlchemyError as e:
-        # ... (no change) ...
         db.rollback()
         raise ExternalApiError("Database", message=str(e))
     
     except Exception as e:
-        # ... (no change) ...
         db.rollback()
         raise e
     
@@ -229,11 +204,8 @@ def get_app_status(db: Session) -> Optional[models.Status]:
     """
     Fetches the global status (total count and last refresh) from the DB.
     """
-    # We just grab the one row we know (id=1)
     return db.query(models.Status).filter(models.Status.id == 1).first()
 
-
-# --- 2. NEW FUNCTION FOR /countries/:name ---
 def get_country_by_name(db: Session, name: str) -> Optional[models.Country]:
     """
     Fetches a single country from the DB by its name (case-insensitive).
@@ -241,19 +213,15 @@ def get_country_by_name(db: Session, name: str) -> Optional[models.Country]:
     return db.query(models.Country).filter(models.Country.name.ilike(name)).first()
 
 
-# --- 3. NEW FUNCTION FOR DELETE /countries/:name ---
 def delete_country_by_name(db: Session, name: str) -> Optional[models.Country]:
     """
     Deletes a single country from the DB by its name (case-insensitive).
     Returns the deleted country object, or None if not found.
     """
-    # First, find the country
     country_to_delete = db.query(models.Country).filter(models.Country.name.ilike(name)).first()
     
     if country_to_delete:
-        # If we found it, delete it from the session
         db.delete(country_to_delete)
-        # Commit the deletion
         db.commit()
     
     return country_to_delete
@@ -268,22 +236,13 @@ def get_countries(
     Fetches all countries from the DB, with optional filters and sorting.
     """
     
-    # Start with a base query to get all countries
     query = db.query(models.Country)
-    
-    # --- A. Apply Filters ---
-    
-    # If a region is provided, add a case-insensitive filter
     if region:
         query = query.filter(models.Country.region.ilike(f"%{region}%"))
         
-    # If a currency is provided, add a case-insensitive filter
     if currency:
         query = query.filter(models.Country.currency_code.ilike(currency))
         
-    # --- B. Apply Sorting ---
-    
-    # We define the allowed sort fields to prevent errors
     allowed_sort_fields = {
         "name_asc": asc(models.Country.name),
         "name_desc": desc(models.Country.name),
@@ -293,15 +252,11 @@ def get_countries(
         "gdp_desc": desc(models.Country.estimated_gdp)
     }
     
-    # Default sort
+    # Default sorting
     sort_logic = asc(models.Country.name)
 
     if sort and sort in allowed_sort_fields:
         sort_logic = allowed_sort_fields[sort]
     
-    # Apply the sorting
     query = query.order_by(sort_logic)
-    
-    # --- C. Execute Query ---
-    # Finally, run the query and return all results
     return query.all()
