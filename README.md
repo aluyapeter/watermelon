@@ -56,7 +56,7 @@ The `GET /countries` endpoint supports the following query parameters:
 
 ```
 git clone https://github.com/your-username/watermelon.git
-cd country-api
+cd watermelon
 ```
 
 ### 3. Set Up Virtual Environment
